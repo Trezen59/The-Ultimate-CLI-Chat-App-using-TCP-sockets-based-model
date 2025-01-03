@@ -1,24 +1,5 @@
 // server app
-
-#define _GNU_SOURCE
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <arpa/inet.h>
-#include <fcntl.h>
-
-#define MAX 100
-#define PORT1 8080
-#define PORT2 8081
-
-#define SERVER_VERSION 1.0.0
+#include"server.h"
 
 // function to recieve file
 void recvfile(int connfd)
@@ -39,7 +20,6 @@ void recvfile(int connfd)
 	{
 		printf("file already found\n");
 		//return;
-
 	}
 	else
 	{
@@ -75,7 +55,6 @@ void recvfile(int connfd)
 		if(len == -1)
 		{
 			printf("write unsuccessful\n");
-
 		}
 		else
 		{
@@ -87,7 +66,6 @@ void recvfile(int connfd)
 	}
 		free(size);
 }
-
 
 // function to send the file
 void sendfile(int clifd)
@@ -130,7 +108,7 @@ void sendfile(int clifd)
 		buff[len] = '\0';
 
 		printf("lenth read = %d\n", len);
-//		printf("file contents : \n%s", buff);
+		//printf("file contents : \n%s", buff);
 
 		// send file
 		int ret = write(clifd, buff, *size);
@@ -149,8 +127,6 @@ void sendfile(int clifd)
 		printf("file not found\n");
 	}
 }
-
-
 
 void *reading(void *connfd)
 {
@@ -224,7 +200,6 @@ void *reading(void *connfd)
 	pthread_exit(NULL);
 }
 
-
 void *writing(void *clifd)
 {
 	int flag = 1;
@@ -239,19 +214,16 @@ void *writing(void *clifd)
 
 	}
 
-
 	int *bufflen = malloc(sizeof(int));
 
 	while(flag)
 	{
-
 		printf("\n");
 
 		int current_size = MAX;
+		int i = 0;
 
 		bzero(buff, MAX);
-
-		int i = 0;
 
 		// get the message and store it in buffer
 		while (( buff[i++] = getchar() ) != '\n')
@@ -271,11 +243,10 @@ void *writing(void *clifd)
 				}
 			}
 		}
-
 		buff[i] = '\0';
 
 		//printf("buffer value = %s", buff);
-		printf("i = %d\n", i);
+		//printf("i = %d\n", i);
 		// store message length in bufflen
 		*bufflen = i;
 
@@ -323,40 +294,40 @@ void *writing(void *clifd)
 	pthread_exit(NULL);
 }
 
-
 int create_socket()
 {
-	int sockfd;
+	int sockfd = -1;
 
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd == -1) {
-		printf("socket creation failed...\n");
+	if (sockfd < 0) {
+		printf("socket creation failed... exit code %d\n", sockfd);
 		close(sockfd);
 		exit(0);
 	}
 	else
 	{
-		printf("Socket successfully created..\n");
+		printf("Socket successfully created.. FD: %d\n", sockfd);
 		return sockfd;
 	}
 }
 
-
-// main function
 int main()
 {
-	int sockfd, connfd;
-	socklen_t len;
+	int sockfd = -1;
+	int connfd = -1;
+	int reuse1;
+	socklen_t len = -1;
 	struct sockaddr_in servaddr, cli;
 
 	// socket create and verification
 	sockfd = create_socket();
 
 	// to reuse socket with same address
-	int reuse1 = 1;
+	reuse1 = 1;
 	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse1, sizeof(reuse1)) < 0)
 		perror("setsockopt(SO_REUSEADDR) failed");
 
+	// clear the servaddr
 	memset(&servaddr, '\0', sizeof(servaddr));
 
 	// assign IP, PORT
@@ -384,11 +355,9 @@ int main()
 
 	len = sizeof(cli);
 
-	// Accept the data from client
+	// Accept connection from client
 	connfd = accept(sockfd, (struct sockaddr*)&cli, &len);
-
 	if (connfd < 0) {
-
 		printf("server accept failed...\n");
 		close(sockfd);
 		exit(0);
@@ -397,20 +366,20 @@ int main()
 		printf("server accepted the client...\n");
 	}
 
+	// ============= client setup ================================================================
 
-	// client
-
-	int clifd;
+	int clifd = -1;
+	int reuse2;
+	struct sockaddr_in cliaddr;
 
 	// create a socket
 	clifd = create_socket();
 
 	// to reuse socket with same address
-	int reuse2 = 1;
+	reuse2 = 1;
 	if (setsockopt(clifd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse2, sizeof(reuse2)) < 0)
 		perror("setsockopt(SO_REUSEADDR) failed");
 
-	struct sockaddr_in cliaddr;
 	bzero(&cliaddr, sizeof(cliaddr));
 
 	// address structure
@@ -427,26 +396,20 @@ int main()
 	else
 		printf("connected to socket\n");
 
-
-
-//	printf("\n****************** Server  ***************************\n\n");
+/* Threading implementation */
 
 	pthread_t t1, t2;
-
 	int thread1, thread2;
 	int choice;
-
 	char choice_buff[MAX];
 
 	// menu
-
 	do
 	{
 
 //		bzero(choice_buff, MAX);
 //		read(connfd, choice_buff, sizeof(choice_buff));
 //		printf("%s", choice_buff);
-
 
 		printf("\n1) Chat.\n2) Send File.\n3) Recieve file.\n4) Exit.\n\n Please enter a choice : ");
 		scanf("%d", &choice);
@@ -460,16 +423,15 @@ int main()
 		write(clifd, choice_buff, sizeof(choice_buff));
 		bzero(choice_buff, MAX);
 
-
 		// switch case for multiple choices
 		switch(choice)
 		{
 
 			case 1:
 				// message
-
 				printf("\n\n  ***********Chat APP started**********\n\n");
 				printf("\nsend 'bye' to exit chat app\n");
+
 				// creating threads
 				thread1 = pthread_create(&t1, NULL, (void *)reading, (void *)&connfd);
 				if(thread1 != 0)
@@ -487,25 +449,19 @@ int main()
 				pthread_join(t1, NULL);
 				pthread_join(t2, NULL);
 
-
 				printf("Chat ended\n\n");
-
 				break;
 
 			case 2:
 				// send file
 				printf("\nsending file\n");
-
 				sendfile(clifd);
-
 				break;
 
 			case 3:
 				// recieve file
 				printf("recieving file..\n");
-
 				recvfile(connfd);
-
 				break;
 
 			case 4:
@@ -517,9 +473,10 @@ int main()
 				exit(0);
 
 			default:
-				// message
+				// Chat
 				printf("\n\n  ***********Chat APP started**********\n\n");
 				printf("\nsend 'bye' to exit chat app\n");
+
 				// creating threads
 				thread1 = pthread_create(&t1, NULL, (void *)reading, (void *)&connfd);
 				if(thread1 != 0)
