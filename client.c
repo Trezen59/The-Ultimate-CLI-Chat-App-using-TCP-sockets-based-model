@@ -1,310 +1,78 @@
-// TCP client code for chatting application
-#include"client.h"
+#include "client.h"
 
-// function to send file
-void sendfile(int clifd)
+void *reading(void *server_data)
 {
-	// location and name of file
-	char loc[MAX] = "/home/trezen/";
-	char name[MAX] = "input.txt";
+    int flag = 1;
+    int ret = -1;
+    char buff[MAX_CHAT_MSG_LEN] = {0};
 
-	// file size
-	struct stat st;
+    /* Infinit Loop */
+    while(flag)
+    {
+        bzero(buff, MAX_CHAT_MSG_LEN);
 
-	strcat(loc, name);
+        /* read data into buff */
+        ret = read(((SERVER_DATA *)server_data)->mainClientFD, buff, MAX_CHAT_MSG_LEN);
+        if(ret < 0)
+        {
+            perror("read :");
+            break;
+        }
+        printf("\n\t\t\t %s\n", buff);
 
-	// check if file exists
-	if(access(loc, F_OK | R_OK) != -1)
-	{
-		printf("file is found and can be read..\n");
-
-		// open the file
-		int fd = open((char *)loc, O_RDONLY);
-		if(fd == -1)
-		{
-			printf("error in opening fd\n");
-		}
-
-		// get file size
-		stat(loc, &st);
-		int *size = malloc(sizeof(int));
-		*size = st.st_size;
-
-		// init buffer with file size
-		char *buff = (char *)malloc(*size);
-		bzero(buff, *size);
-
-		printf("size of file is %d\n", *size);
-
-		// send length
-		write(clifd, size, sizeof(int));
-
-		//store contents of file into buffer
-		int len = read(fd, buff, *size);
-		buff[len] = '\0';
-
-		printf("lenth read = %d\n", len);
-		//printf("file contents : \n%s", buff);
-
-		// send file
-		int ret = write(clifd, buff, *size);
-		if(ret == -1)
-		{
-			printf("write unsuccessful\n");
-		}
-		else
-			printf("write successful. File sent\n");
-
-		bzero(buff, *size);
-		free(size);
-	}
-	else
-	{
-		printf("file not found\n");
-	}
+        /* compare and check for "bye" to exit chat */
+        if(!(strncmp("bye", buff , 3)))
+        {
+            flag = 0;
+            break;
+        }
+    }
+    pthread_exit(NULL);
 }
 
-// function to recieve file
-void recvfile(int connfd)
+void *writing(void *server_data)
 {
-	// file location and name
-	char loc[MAX] = "/home/trezen/Desktop/task/";
-	char name[MAX] = "file2.txt";
+    int flag = 1;
+    int ret = -1;
+    char buff[MAX_CHAT_MSG_LEN] = {0};
 
-	// init size to store size of file
-	int *size = malloc(sizeof(int));
-	bzero(size, sizeof(int));
+    while(flag)
+    {
+        int i = 0;
+        printf("\n");
 
-	// join loc and name
-	strcat(loc, name);
+        bzero(buff, MAX_CHAT_MSG_LEN);
 
-	// check if file exists at a given location
-	if(access(loc, F_OK | R_OK) != -1)
-	{
-		printf("file already found\n");
-		//return;
-	}
-	else
-	{
-		// open and create file if file not available
-		int fd = open((char *)loc, O_RDWR | O_CREAT);
-		if(fd == -1)
-		{
-			printf("error in opening fd\n");
-		}
+        /* get the message and store it in buffer */
+        while (( buff[i++] = getchar() ) != '\n' || i == MAX_CHAT_MSG_LEN)
+        buff[i] = '\0';
 
-		// get file size
-		if((read(connfd, size, sizeof(int))) == -1)
-			perror("read");
-		else
-			printf("read length success\n");
+        /* write the content */
+        ret = write(((SERVER_DATA *)server_data)->secondaryClientFD, buff, MAX_CHAT_MSG_LEN);
+        if(ret < 0)
+        {
+            perror("write : ");
+            break;
+        }
 
-		printf("size recieved is %d\n", *size);
-
-		char *buff = (char *)malloc(*size);
-		bzero(buff, *size);
-
-		// read file into buff
-		int ret = read(connfd, buff, (int)*size);
-		if(ret == -1)
-		{
-			printf("read unsuccessful\n");
-		}
-
-		//printf("buffer value after read is : %s", buff);
-
-		// write the contents of buff to file
-		int len = write(fd, buff, (int)*size);
-		if(len == -1)
-		{
-			printf("write unsuccessful\n");
-
-		}
-		else
-		{
-			printf("written to file\n");
-			//printf("buffer content after write : %s", buff);
-		}
-		bzero(buff, (int)*size);
-		free(buff);
-	}
-	free(size);
-}
-
-void *reading(void *connfd)
-{
-	int flag = 1;
-
-	// declare bufflen to store length of msg
-	unsigned int *bufflen = malloc(sizeof(int));
-	if(bufflen == NULL)
-	{
-		printf("failed to allocate memory to bufflen in reading\n");
-		close(*(int *)connfd);
-		exit(0);
-	}
-
-	bzero(bufflen, sizeof(int));
-
-	while(flag)
-	{
-		bzero(bufflen, sizeof(int));
-
-		// read length of buffer
-		if((read(*(int *)connfd, bufflen, sizeof(int))) == -1)
-		{
-			perror("read");
-			//free(bufflen);
-			//close(*(int *)connfd);
-			//exit(0);
-			break;
-		}
-		printf("recieved len : %d\n", *bufflen);
-
-		char *buff = malloc(*bufflen);
-		if(buff == NULL)
-		{
-			printf("failed to allocate memory in buff in reading\n");
-			//close(*(int *)connfd);
-			//free(bufflen);
-			//exit(0);
-		}
-
-		bzero(buff, *bufflen);
-
-		//read data into buff
-		int ret = read(*(int *)connfd,(void *)buff, *bufflen);
-		if(ret == -1)
-		{
-			perror("read");
-//			free(bufflen);
-//			free(buff);
-//			close(*(int *)connfd);
-			//exit(0);
-			break;
-		}
-		printf("\n\t\t\t%s\n", buff);
-
-		// compare and check for "bye" to exit chat
-		if(!(strncmp("bye", buff , 3)))
-		{
-			flag = 0;
-//			close(*(int *)connfd);
-//			free(bufflen);
-//			free(buff);
-			//exit(0);
-			break;
-			//return NULL;
-		}
-		bzero(buff, *bufflen);
-		free(buff);
-	}
-	free(bufflen);
-	pthread_exit(NULL);
-}
-
-void *writing(void *clifd)
-{
-	int flag = 1;
-
-	// init buffer with a set size
-	char *buff = malloc(MAX);
-	if(buff == NULL)
-	{
-		printf("failed to allocate memory to buff in writting\n");
-		close(*(int *)clifd);
-		exit(0);
-	}
-
-	int *bufflen = malloc(sizeof(int));
-
-	while(flag)
-	{
-		printf("\n");
-
-		int current_size = MAX;
-		int i = 0;
-
-		bzero(buff, MAX);
-
-		// get the message and store it in buffer
-		while (( buff[i++] = getchar() ) != '\n')
-		{
-			if(i == current_size)
-			{
-				current_size = i + MAX;
-
-				// reallocate memory if set mem size exceeded
-				buff = realloc(buff, current_size);
-				if(buff == NULL)
-				{
-					printf("failed to reallocate memory\n");
-					//close(*(int *)clifd);
-					//free(buff);
-					//exit(0);
-					break;
-				}
-			}
-		}
-
-		buff[i] = '\0';
-
-		printf("i = %d\n", i);
-		// store message length in bufflen
-		*bufflen = i;
-
-		//printf("bufflen = %d\n", *bufflen-1);
-
-		// send the bufflen
-		if((write(*(int *)clifd, bufflen, sizeof(int))) == -1)
-		{
-			perror("write");
-			//free(buff);
-			//free(bufflen);
-			//close(*(int *)clifd);
-			//exit(0);
-			break;
-		}
-
-		// write the content
-		int wri1 = write(*(int *)clifd, buff, i);
-		if(wri1 == -1)
-		{
-			perror("write : ");
-			//close(*(int *)clifd);
-			//free(buff);
-			//free(bufflen);
-			//exit(0);
-			break;
-		}
-
-		// compare msg for "bye" to exit chat
-		if(!(strncmp("bye", buff , 3)))
-		{
-			flag = 0;
-			//close(*(int *)clifd);
-			//free(buff);
-			//free(bufflen);
-			//exit(0);
-			break;
-			//return NULL;
-		}
-		bzero(buff, i);
-	}
-
-	free(buff);
-	free(bufflen);
-	pthread_exit(NULL);
+        /* compare msg for "bye" to exit chat */
+        if(!(strncmp("bye", buff , 3)))
+        {
+            flag = 0;
+            break;
+        }
+    }
+    pthread_exit(NULL);
 }
 
 int create_socket()
 {
-	int sockfd;
+	int sockfd = -1;
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
-	if (sockfd == -1) {
+	if (sockfd < 0) {
 		printf("socket creation failed...\n");
-		exit(0);
+		return sockfd;
 	}
 	else
 	{
@@ -313,202 +81,261 @@ int create_socket()
 	}
 }
 
-// main function
+int setup_server(int server_fd,
+                int *connfd,
+                struct sockaddr_in *servaddr,
+                struct sockaddr_in *cli,
+                socklen_t *len)
+{
+    int ret = -1;
+    int reuse1;
+
+    /* to reuse socket with same address */
+    reuse1 = 1;
+    ret = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,
+            (const char *)&reuse1, sizeof(reuse1));
+    if (ret < 0){
+        perror("setsockopt(SO_REUSEADDR) failed");
+        return ret;
+    }
+
+    /* clear the servaddr */
+    memset(servaddr, '\0', sizeof(*servaddr));
+
+    /* assign IP, PORT */
+    servaddr->sin_family = AF_INET;
+    /* long integer from host byte order to network byte order. */
+    servaddr->sin_addr.s_addr = htonl(INADDR_ANY);
+    /* short integer from host byte order to network byte order. */
+    servaddr->sin_port = htons(PORT2);
+
+    /* Binding newly created socket to given IP and verification */
+    ret = bind(server_fd, (struct sockaddr*)servaddr, sizeof(*servaddr));
+    if (ret != 0) {
+        printf("socket bind failed... ret: %d\n", ret);
+        return ret;
+    }
+    else
+        printf("Socket successfully binded..\n");
+
+    /* server listens */
+    ret = listen(server_fd, 5);
+    if (ret != 0) {
+        printf("Listen failed...\n");
+        return ret;
+    }
+    else
+        printf("Server listening..\n");
+
+    *len = sizeof(cli);
+
+    /* Accept connection from client */
+    *connfd = accept(server_fd, (struct sockaddr*)&cli, len);
+    if (*connfd < 0) {
+        printf("server accept failed...\n");
+        return *connfd;
+    }
+    else{
+        printf("server accepted the client...\n");
+    }
+
+    return 1;
+}
+
+int setup_client(int client_fd,
+                struct sockaddr_in *cliaddr)
+{
+    int reuse = 1;
+    int ret = -1;
+
+    /* to reuse socket with same address */
+    ret = setsockopt(client_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(reuse));
+    if (ret < 0){
+        perror("setsockopt(SO_REUSEADDR) failed");
+        return ret;
+    }
+
+    bzero(cliaddr, sizeof(*cliaddr));
+
+    /* address structure */
+    cliaddr->sin_family = AF_INET;
+    cliaddr->sin_addr.s_addr = inet_addr("127.0.0.1");
+    cliaddr->sin_port = htons(PORT1);
+
+    /* connect to server */
+    ret = connect(client_fd, (struct sockaddr *)cliaddr, sizeof(*cliaddr));
+    if(ret < 0)
+    {
+        perror("connect");
+        return ret;
+    }
+    else
+        printf("connected to socket\n");
+
+    return 0;
+}
+
+int multiThreadedChatFunction(SERVER_DATA *server_data,
+                                pthread_t *readThreadID,
+                                pthread_t *writeThreadID)
+{
+    int ret = -1;
+
+    printf("\n\n  *********** Chat APP started **********\n\n");
+    printf("\nsend 'bye' to exit chat app\n");
+
+    /* creating threads by default joinable */
+    ret = pthread_create(readThreadID, NULL, reading, (void *)server_data);
+    if(ret != 0)
+    {
+        perror("thread1");
+        return -1;
+    }
+    ret = pthread_create(writeThreadID, NULL, writing, (void *)server_data);
+    if(ret != 0)
+    {
+        perror("thread2");
+        return -1;
+    }
+
+    /* Joining the threads */
+    pthread_join(*readThreadID, NULL);
+    pthread_join(*writeThreadID, NULL);
+
+    return 0;
+}
+
 int main()
 {
-
 	printf("Client App version: %s\n", CLIENT_VERSION);
-	// client
 
-	int clifd;
-	int reuse1;
-	struct sockaddr_in cliaddr;
+    int ret = -1;
+    int serverFD = -1;
+    int connectedClientFD = -1;
+    int internalClientFD = -1;
+    socklen_t len = -1;
+    struct sockaddr_in servaddr, connectedClientAddr;
+    struct sockaddr_in internalClientAddr;
+    char choice_buff[MAX];
+    int choice = 1;
+    SERVER_DATA *serverData;
 
-	// socket create and verification
-	clifd = create_socket();
+    serverData = (SERVER_DATA *) malloc (sizeof(SERVER_DATA));
+    if (serverData == NULL){
+        printf("Cannot allocate memory for serverData\n");
+        exit(1);
+    }
 
-	// to reuse socket with the same address
-	reuse1 = 1;
-	if(setsockopt(clifd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse1, sizeof(reuse1)) < 0)
-		perror("setsockopt(SO_REUSEADDR) failed");
+    /* Threading implementation */
+    pthread_t readingThread, writingThread;
 
-	bzero(&cliaddr, sizeof(cliaddr));
+    /* create server socket */
+    serverFD = create_socket();
+    if (serverFD < 0){
+        printf("Failed creating server FD\n");
+        exit(1);
+    }
 
-	// assign IP, PORT
-	cliaddr.sin_family = AF_INET;
-	// enter IP of server to connect
-	cliaddr.sin_addr.s_addr = inet_addr("127.0.0.1"); // currently on loopback
-	cliaddr.sin_port = htons(PORT1);
+    /* create client socket */
+    internalClientFD = create_socket();
+    if (internalClientFD < 0){
+        printf("Failed creating internal client FD\n");
+        if (serverFD)
+            close(serverFD);
+        exit(1);
+    }
 
-	// connect the client socket to server socket
-	if (connect(clifd, (struct sockaddr*)&cliaddr, sizeof(cliaddr)) == -1)
-	{
-		printf("connection with the server failed...\n");
-		close(clifd);
-		exit(0);
-	}
-	else
-		printf("connected to the server..\n");
+    /* client setup */
+    ret = setup_client(internalClientFD, &internalClientAddr);
+    if (ret < 0) {
+        if (serverFD)
+            close(serverFD);
+        if (connectedClientFD)
+            close(connectedClientFD);
+        exit(1);
+    }
 
-/* ==============  server  ===========================*/
+    /* server setup */
+    ret = setup_server(serverFD, &connectedClientFD, &servaddr, &connectedClientAddr, &len);
+    if (ret < 0) {
+        if (serverFD)
+            close(serverFD);
+        if (connectedClientFD)
+            close(connectedClientFD);
+        exit(1);
+    }
 
-	int sockfd;
-	int reuse2;
-	struct sockaddr_in servaddr, cli;
+    serverData->mainServerFD = serverFD;
+    serverData->mainClientFD = connectedClientFD;
+    serverData->secondaryClientFD = internalClientFD;
 
-	// create a socket
-	sockfd = create_socket();
-
-	// to reuse socket with same address
-	reuse2 = 1;
-	if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse2, sizeof(reuse2)) < 0)
-		perror("setsockopt(SO_REUSEADDR) failed");
-
-	// assign IP, PORT
-	servaddr.sin_family = AF_INET;
-	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-	servaddr.sin_port = htons(PORT2);
-
-	// binding newly created socket
-	if((bind(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr))) != 0)
-	{
-		perror("bind : ");
-		exit(0);
-	}
-	else
-		printf("socket successfully binded\n");
-
-	// server listens
-	if((listen(sockfd, 5)) != 0)
-	{
-		perror("listen : ");
-		exit(0);
-	}
-	else
-	{
-		printf("server listening\n");
-	}
-
-	socklen_t len = sizeof(cli);
-
-	// accept the data from client
-	int connfd = accept(sockfd, (struct sockaddr*)&cli, &len);
-	if(connfd == -1)
-	{
-		perror("connfd : ");
-		exit(0);
-	}
-	else
-		printf("server accepted the client \n");
-
-//	printf("\n************************ Client  ************************\n\n");
-
-
-	int choice;
-	int thread1, thread2;
-	char choice_buff[MAX];
-	pthread_t t1, t2;
-
-	// menu
+	/* Infinite Loop */
 	do
 	{
-		// recieve the selected choice
+		char *c;
 		bzero(choice_buff, MAX);
-		read(connfd, choice_buff, sizeof(choice_buff));
-		printf("%s", choice_buff);
 
-		// display menu and get choice
+		/* display menu and get choice */
 		printf("\n\n1) Chat.\n2) Send File.\n3) Recieve File.\n4) Exit.\n\n Please enter a choice : ");
 		scanf("%d", &choice);
 
-//		char *c;
-//		asprintf(&c, "%d", choice);
-//		strcpy(choice_buff, "\n The choice selected is ");
-//		strcat(choice_buff, c);
+		asprintf(&c, "%d", choice);
+		strcat(choice_buff, c);
 
-//		write(clifd, choice_buff, sizeof(choice_buff));
-//		bzero(choice_buff, MAX);
+		write(internalClientFD, choice_buff, sizeof(choice));
 
-		// switch case for multiple choices
-		switch(choice)
-		{
+        switch(atoi(choice_buff))
+        {
+            case CHAT:
+                ret = multiThreadedChatFunction(serverData,
+                        &readingThread,
+                        &writingThread);
+                if (ret < 0) {
+                    printf("Chat functionality exited with code %d\n", ret);
+                    if (connectedClientFD)
+                        close(connectedClientFD);
+                    if (serverFD)
+                        close(serverFD);
+                    if (internalClientFD)
+                        close(internalClientFD);
+					return 0;
+                }
 
-			case 1:
-				// message
-				printf("\n\n ********** Chat APP started ************ \n\n");
-				printf("\n send 'bye' to exit chat app\n");
+                printf("Chat ended\n\n");
+                break;
 
-				// creating threads
-				thread1 = pthread_create(&t1, NULL, (void *)writing, (void *)&clifd);
-				if(thread1 != 0)
-				{
-					perror("thread 1");
-				}
+            case SEND_FILE:
+                printf("\nsending file\n");
+                //sendfile(internalClientFD);
+                break;
 
-				thread2 = pthread_create(&t2, NULL, (void *)reading, (void *)&connfd);
-				if(thread2 != 0)
-				{
-					perror("thread 2");
-				}
+            case RECIEVE_FILE:
+                printf("recieving file..\n");
+                //recvfile(connectedClientFD);
+                break;
 
-				// terminating threads
-				pthread_join(t1, NULL);
-				pthread_join(t2, NULL);
+            case EXIT:
+                printf("\nThank you for using this App.\n\n");
+                if (connectedClientFD)
+                    close(connectedClientFD);
+                if (serverFD)
+                    close(serverFD);
+                if (internalClientFD)
+                    close(internalClientFD);
+				return 0;
 
-				printf("\nChat ended\n\n");
-				break;
+            default:
+				printf("\nPlease select a valid choice\n");
+        }
+    }
+    while(1);
 
-			case 2:
-				// sending file
-				printf("\nsending file \n");
-				sendfile(clifd);
-				break;
+    if (connectedClientFD)
+		close(connectedClientFD);
+    if (serverFD)
+		close(serverFD);
+    if (internalClientFD)
+		close(internalClientFD);
 
-			case 3:
-				// recieving file
-				printf("recieving file..\n");
-				recvfile(connfd);
-				break;
-
-			case 4:
-				// Exit
-				printf("Thank you for using this App.\n\n");
-				close(connfd);
-				close(sockfd);
-				close(clifd);
-				exit(0);
-
-			default:
-				// message
-
-				// creating threads
-				printf("\n\n ********** Chat APP started ************ \n\n");
-				printf("\n send 'bye' to exit chat app\n");
-
-				thread1 = pthread_create(&t1, NULL, (void *)writing, (void *)&clifd);
-				if(thread1 != 0)
-				{
-					perror("thread 1");
-				}
-
-				thread2 = pthread_create(&t2, NULL, (void *)reading, (void *)&connfd);
-				if(thread2 != 0)
-				{
-					perror("thread 2");
-				}
-
-				// terminating the threads
-				pthread_join(t1, NULL);
-				pthread_join(t2, NULL);
-
-				printf("\nChat ended\n\n");
-		}
-		// choice end
-	}while(choice);
-	// menu end
-
-	// close the socket
-	close(sockfd);
 	return 0;
 }
-
