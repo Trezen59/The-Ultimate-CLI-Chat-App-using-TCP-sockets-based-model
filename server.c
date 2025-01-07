@@ -1,3 +1,24 @@
+/*
+
+Author: Trezen Parmar
+E-MAIL: trezen7984891023@gmail.com
+
+DESCRIPTION:
+
+This app is a server-client app which uses sockets mainly for communication.
+This is a bidirectional app in which both participants can send and receive
+messages simultaneously. It also has a menu based approach to select the
+appropriate options.
+
+USE:
+1. Compile the server and client app using the command "$make"
+2. Run the server "$./server" and then run the client "$./client".
+3. Select an option from the Menu shown.
+4. Enjoy the chat.
+5. Follow the instructions.
+
+*/
+
 #include "server.h"
 
 void *reading(void *server_data)
@@ -181,7 +202,7 @@ int multiThreadedChatFunction(SERVER_DATA *server_data,
 {
 	int ret = -1;
 
-	printf("\n\n  *********** Chat APP started **********\n\n");
+	printf("\n================= Bidirectional Chat Started ================\n");
 	printf("\nsend 'bye' to exit chat app\n");
 
 	/* creating threads by default joinable */
@@ -202,6 +223,7 @@ int multiThreadedChatFunction(SERVER_DATA *server_data,
 	pthread_join(*readThreadID, NULL);
 	pthread_join(*writeThreadID, NULL);
 
+	printf("\n================= Bidirectional Chat ended ================\n");
 	return 0;
 }
 
@@ -213,6 +235,7 @@ int main()
 	int serverFD = -1;
 	int connectedClientFD = -1;
 	int internalClientFD = -1;
+	int running = 1;
 	socklen_t len = -1;
 	struct sockaddr_in servaddr, connectedClientAddr;
 	struct sockaddr_in internalClientAddr;
@@ -272,11 +295,14 @@ int main()
 	do
 	{
 		/* Read the choice from the client FD */
-		bzero(choice_buff, 10);
-		read(connectedClientFD, choice_buff, sizeof(choice_buff));
-		printf("choice_buff: %s", choice_buff);
+		bzero(choice_buff, MAX);
 
-		if (atoi(choice_buff) <= EXIT)
+		/* Receive choice from client */
+		int bytes_received = recv(connectedClientFD, choice_buff, MAX, 0);
+		if (bytes_received <= 0){
+			printf("Client disconnected\n");
+		}
+		//printf("choice_buff: %s", choice_buff);
 
 		switch(atoi(choice_buff))
 		{
@@ -286,16 +312,9 @@ int main()
 						&writingThread);
 				if (ret < 0) {
 					printf("Chat functionality exited with code %d\n", ret);
-					if (connectedClientFD)
-						close(connectedClientFD);
-					if (serverFD)
-						close(serverFD);
-					if (internalClientFD)
-						close(internalClientFD);
-					return 0;
+					running = 0;
+					break;
 				}
-
-				printf("Chat ended\n\n");
 				break;
 
 			case SEND_FILE:
@@ -310,16 +329,14 @@ int main()
 
 			case EXIT:
 				printf("\nThank you for using this App.\n\n");
-				if (connectedClientFD)
-					close(connectedClientFD);
-				if (serverFD)
-					close(serverFD);
-				if (internalClientFD)
-					close(internalClientFD);
-				return 0;
+				running = 0;
+				break;
+
+			default:
+				printf("\nInvalid choice entered\n");
 		}
 	}
-	while(1);
+	while(running);
 
 	if (connectedClientFD)
 		close(connectedClientFD);

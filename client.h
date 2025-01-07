@@ -18,6 +18,11 @@
 #define PORT2 8081
 #define MAX_CHAT_MSG_LEN 1000
 
+#define MAJOR_VERSION "1"
+#define MINOR_VERSION "0"
+#define PATCH_VERSION "3"
+#define CLIENT_VERSION MAJOR_VERSION"."MINOR_VERSION"."PATCH_VERSION
+
 enum MENU {
     CHAT = 1,
     SEND_FILE,
@@ -31,7 +36,4 @@ typedef struct{
     int secondaryClientFD;
 }SERVER_DATA;
 
-#define MAJOR_VERSION "1"
-#define MINOR_VERSION "0"
-#define PATCH_VERSION "2"
-#define CLIENT_VERSION MAJOR_VERSION"."MINOR_VERSION"."PATCH_VERSION
+
