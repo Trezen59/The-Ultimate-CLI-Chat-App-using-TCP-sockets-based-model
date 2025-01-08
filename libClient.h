@@ -20,19 +20,22 @@
 
 #define MAJOR_VERSION "1"
 #define MINOR_VERSION "0"
-#define PATCH_VERSION "3"
-#define SERVER_VERSION MAJOR_VERSION"."MINOR_VERSION"."PATCH_VERSION
+#define PATCH_VERSION "4"
+#define CLIENT_VERSION MAJOR_VERSION"."MINOR_VERSION"."PATCH_VERSION
+
+#define CLIENT_DEBUG_PRINTS 0
 
 enum MENU {
-	CHAT = 1,
-	SEND_FILE,
-	RECIEVE_FILE,
-	EXIT
+    CHAT = 1,
+    SEND_FILE,
+    RECIEVE_FILE,
+    EXIT
 };
 
 typedef struct{
-	int mainServerFD;
-	int mainClientFD;
-	int secondaryClientFD;
+    int mainServerFD;
+    int mainClientFD;
+    int secondaryClientFD;
 }SERVER_DATA;
+
 

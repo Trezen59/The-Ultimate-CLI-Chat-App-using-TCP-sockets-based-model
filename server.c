@@ -19,7 +19,135 @@ USE:
 
 */
 
-#include "server.h"
+#include "libServer.h"
+
+
+int sendFileToClient(int cliFD)
+{
+	int ret = -1;
+	int fileFD = -1;
+    char fileLocation[MAX] = "/home/einfochips/users/trezen/files/server-client-enhanced/ServerFiles/";
+    char fileName[MAX] = "toClient.txt";
+    struct stat st;
+
+    strcat(fileLocation, fileName);
+
+	/* check if file exists */
+	ret = access(fileLocation, F_OK | R_OK);
+	if(ret < 0){
+		printf("file '%s' not found\n", fileName);
+		return -1;
+	}
+	printf("file is found and can be read..\n\n");
+
+	fileFD = open((char *)fileLocation, O_RDONLY);
+	if(fileFD < 0){
+		printf("error in opening fd\n");
+		return -1;
+	}
+
+	/* get file size */
+	stat(fileLocation, &st);
+	int *size = malloc(sizeof(int));
+	*size = st.st_size;
+
+	/* init buffer with file size */
+	char *buff = (char *)malloc(*size);
+	bzero(buff, *size);
+
+	if (SERVER_DEBUG_PRINTS)
+		printf("size of file is %d\n", *size);
+
+	/* send size of file */
+	write(cliFD, size, sizeof(int));
+
+	/* store contents of file into buffer */
+	int len = read(fileFD, buff, *size);
+	buff[len] = '\0';
+
+	if (SERVER_DEBUG_PRINTS)
+		printf("lenth read = %d\n", len);
+	if (SERVER_DEBUG_PRINTS)
+		printf("file contents : %s\n", buff);
+
+	/* send file */
+	ret = write(cliFD, buff, *size);
+	if(ret < 0){
+		printf("write unsuccessful\n");
+		return -1;
+	} else {
+		printf("======== write successful. File sent ========\n");
+	}
+
+	bzero(buff, *size);
+	free(size);
+	return 0;
+}
+
+int receiveFileFromClient(int connFD)
+{
+	int ret = -1;
+	int fileFD = -1;
+    char fileLocation[MAX] = "/home/einfochips/users/trezen/files/server-client-enhanced/ServerFiles/";
+    char fileName[MAX] = "fromClient.txt";
+
+    /* init size to store size of file */
+    int *size = malloc(sizeof(int));
+    bzero(size, sizeof(int));
+
+    strcat(fileLocation, fileName);
+
+    /* check if file exists at a given location */
+    ret = access(fileLocation, F_OK | R_OK);
+	if (ret >= 0){
+        printf("file already found\n\n");
+	}
+
+	/* open and create file if file not available */
+	fileFD = open((char *)fileLocation, O_RDWR | O_CREAT);
+	if(fileFD < 0){
+		printf("error in opening fd\n");
+		return -1;
+	}
+
+	/* get file size */
+	ret = read(connFD, size, sizeof(int));
+	if (ret < 0)
+		perror("read");
+	else {
+		if (SERVER_DEBUG_PRINTS)
+			printf("read length success\n");
+	}
+
+	if (SERVER_DEBUG_PRINTS)
+		printf("size recieved is %d\n", *size);
+
+	char *buff = (char *)malloc(*size);
+	bzero(buff, *size);
+
+	/* read file into buff */
+	ret = read(connFD, buff, *size);
+	if(ret < 0){
+		printf("read unsuccessful\n");
+		return -1;
+	}
+
+	if (SERVER_DEBUG_PRINTS)
+		printf("buffer value after read is : %s", buff);
+
+	/* write the contents of buff to file */
+	int len = write(fileFD, buff, *size);
+	if(len < 0){
+		printf("write unsuccessful\n");
+	} else {
+		printf("======== written to file ========\n");
+		if (SERVER_DEBUG_PRINTS)
+			printf("buffer content after write : %s", buff);
+	}
+	bzero(buff, *size);
+	free(size);
+	return 0;
+}
 
 void *reading(void *server_data)
 {
@@ -318,14 +446,26 @@ int main()
 				break;
 
 			case SEND_FILE:
-				printf("\nsending file\n");
-				//sendfile(internalClientFD);
+                printf("\n\n======== Sending file to Server: ========\n\n");
+
+                ret = sendFileToClient(internalClientFD);
+                if (ret < 0) {
+                    printf("Chat functionality exited with code %d\n", ret);
+					running = 0;
+					break;
+				}
 				break;
 
 			case RECIEVE_FILE:
-				printf("recieving file..\n");
-				//recvfile(connectedClientFD);
-				break;
+                printf("\n\n======== Recieving file from server: ========\n\n");
+
+                ret = receiveFileFromClient(connectedClientFD);
+                if (ret < 0) {
+                    printf("Chat functionality exited with code %d\n", ret);
+					running = 0;
+					break;
+				}
+                break;
 
 			case EXIT:
 				printf("\nThank you for using this App.\n\n");
@@ -333,7 +473,7 @@ int main()
 				break;
 
 			default:
-				printf("\nInvalid choice entered\n");
+				printf("\nInvalid choice received.\n");
 		}
 	}
 	while(running);
