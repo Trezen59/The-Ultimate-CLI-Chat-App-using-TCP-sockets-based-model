@@ -12,15 +12,18 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #define MAX 100
 #define PORT1 8080
 #define PORT2 8081
 #define MAX_CHAT_MSG_LEN 1000
 
+#define SERVER_IP_ADDR "127.0.0.1"
+
 #define MAJOR_VERSION "1"
 #define MINOR_VERSION "0"
-#define PATCH_VERSION "4"
+#define PATCH_VERSION "5"
 #define CLIENT_VERSION MAJOR_VERSION"."MINOR_VERSION"."PATCH_VERSION
 
 #define CLIENT_DEBUG_PRINTS 0

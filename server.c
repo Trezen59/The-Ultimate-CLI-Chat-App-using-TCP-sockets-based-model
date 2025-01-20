@@ -21,7 +21,6 @@ USE:
 
 #include "libServer.h"
 
-
 int sendFileToClient(int cliFD)
 {
 	int ret = -1;
@@ -63,7 +62,6 @@ int sendFileToClient(int cliFD)
 
 	/* store contents of file into buffer */
 	int len = read(fileFD, buff, *size);
-	buff[len] = '\0';
 
 	if (SERVER_DEBUG_PRINTS)
 		printf("lenth read = %d\n", len);
@@ -81,6 +79,7 @@ int sendFileToClient(int cliFD)
 
 	bzero(buff, *size);
 	free(size);
+	free(buff);
 	return 0;
 }
 
@@ -146,6 +145,7 @@ int receiveFileFromClient(int connFD)
 	}
 	bzero(buff, *size);
 	free(size);
+	free(buff);
 	return 0;
 }
 
@@ -308,7 +308,7 @@ int setup_client(int client_fd,
 
 	/* address structure */
 	cliaddr->sin_family = AF_INET;
-	cliaddr->sin_addr.s_addr = inet_addr("127.0.0.1");
+	cliaddr->sin_addr.s_addr = inet_addr(SERVER_IP_ADDR);
 	cliaddr->sin_port = htons(PORT2);
 
 	/* connect to server */
@@ -368,7 +368,7 @@ int main()
 	struct sockaddr_in servaddr, connectedClientAddr;
 	struct sockaddr_in internalClientAddr;
 	char choice_buff[MAX];
-	SERVER_DATA *serverData;
+	SERVER_DATA *serverData = NULL;
 
 	serverData = (SERVER_DATA *) malloc (sizeof(SERVER_DATA));
 	if (serverData == NULL){
@@ -379,10 +379,14 @@ int main()
 	/* Threading implementation */
 	pthread_t readingThread, writingThread;
 
+START:
+
 	/* create server socket */
 	serverFD = create_socket();
 	if (serverFD < 0){
 		printf("Failed creating server FD\n");
+		if (serverData)
+			free(serverData);
 		exit(1);
 	}
 
@@ -392,6 +396,8 @@ int main()
 		printf("Failed creating internal client FD\n");
 		if (serverFD)
 			close(serverFD);
+		if (serverData)
+			free(serverData);
 		exit(1);
 	}
 
@@ -400,18 +406,25 @@ int main()
 	if (ret < 0) {
 		if (serverFD)
 			close(serverFD);
-		if (connectedClientFD)
-			close(connectedClientFD);
+		if (internalClientFD)
+			close(internalClientFD);
+		if (serverData)
+			free(serverData);
 		exit(1);
 	}
 
 	/* client setup */
 	ret = setup_client(internalClientFD, &internalClientAddr);
 	if (ret < 0) {
-		if (serverFD)
-			close(serverFD);
 		if (connectedClientFD)
 			close(connectedClientFD);
+		if (serverFD)
+			close(serverFD);
+		if (internalClientFD)
+			close(internalClientFD);
+		if (serverData)
+			free(serverData);
+
 		exit(1);
 	}
 
@@ -429,8 +442,20 @@ int main()
 		int bytes_received = recv(connectedClientFD, choice_buff, MAX, 0);
 		if (bytes_received <= 0){
 			printf("Client disconnected\n");
+			if (connectedClientFD)
+				close(connectedClientFD);
+			if (serverFD)
+				close(serverFD);
+			if (internalClientFD)
+				close(internalClientFD);
+			if (serverData)
+				free(serverData);
+
+			goto START;
 		}
-		//printf("choice_buff: %s", choice_buff);
+
+		if (SERVER_DEBUG_PRINTS)
+			printf("choice_buff: %s", choice_buff);
 
 		switch(atoi(choice_buff))
 		{
@@ -484,6 +509,8 @@ int main()
 		close(serverFD);
 	if (internalClientFD)
 		close(internalClientFD);
+	if (serverData)
+		free(serverData);
 
 	return 0;
 }

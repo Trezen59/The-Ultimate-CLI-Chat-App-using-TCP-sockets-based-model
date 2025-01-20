@@ -1,10 +1,14 @@
-target=server client server.o client.o
+target=server client
 normal: $(target)
+
+MY_C_FLAGS=-Wall -ggdb3
+
 client: client.c
-	gcc -Wall client.c -o client -lpthread
-	#gcc -c -Wall client.c -lpthread
+	gcc $(MY_C_FLAGS) client.c -o client -lpthread
+
 server: server.c
-	gcc -Wall server.c -o server -lpthread
-	#gcc -c -Wall server.c -lpthread
+	gcc $(MY_C_FLAGS) server.c -o server -lpthread
+
 clean:
 	rm  $(target)
+	rm ServerFiles/fromClient.txt ClientFiles/fromServer.txt

@@ -63,7 +63,6 @@ int sendFileToServer(int cliFD)
 
 	/* store contents of file into buffer */
 	int len = read(fileFD, buff, *size);
-	buff[len] = '\0';
 
 	if (CLIENT_DEBUG_PRINTS)
 		printf("lenth read = %d\n", len);
@@ -81,6 +80,7 @@ int sendFileToServer(int cliFD)
 
 	bzero(buff, *size);
 	free(size);
+	free(buff);
 	return 0;
 }
 
@@ -146,6 +146,7 @@ int receiveFileFromServer(int connFD)
 	}
 	bzero(buff, *size);
 	free(size);
+	free(buff);
 	return 0;
 }
 
@@ -198,15 +199,13 @@ void *writing(void *server_data)
 
         /* write the content */
         ret = write(((SERVER_DATA *)server_data)->secondaryClientFD, buff, MAX_CHAT_MSG_LEN);
-        if(ret < 0)
-        {
+        if(ret < 0){
             perror("write : ");
             break;
         }
 
         /* compare msg for "bye" to exit chat */
-        if(!(strncmp("bye", buff , 3)))
-        {
+        if(!(strncmp("bye", buff , 3))){
             flag = 0;
             break;
         }
@@ -308,7 +307,7 @@ int setup_client(int client_fd,
 
     /* address structure */
     cliaddr->sin_family = AF_INET;
-    cliaddr->sin_addr.s_addr = inet_addr("127.0.0.1");
+    cliaddr->sin_addr.s_addr = inet_addr(SERVER_IP_ADDR);
     cliaddr->sin_port = htons(PORT1);
 
     /* connect to server */
@@ -355,6 +354,39 @@ int multiThreadedChatFunction(SERVER_DATA *server_data,
     return 0;
 }
 
+void showMenu()
+{
+	/* display menu and get choice */
+	printf("\nWelcome to the Ultimate Chat App.\n");
+	printf("\n1) Chat.");
+	printf("\n2) Send File.");
+	printf("\n3) Recieve File.");
+	printf("\n4) Exit.\n");
+}
+
+int getIntInput(const char *prompt)
+{
+    char input[100];  // Buffer to store user input
+    int value;
+    while (1) {
+        printf("%s", prompt);  // Show prompt to the user
+        if (fgets(input, sizeof(input), stdin) == NULL) {
+            printf("Error reading input. Please try again.\n");
+            continue;
+        }
+
+        // Remove trailing newline character, if any
+        input[strcspn(input, "\n")] = '\0';
+
+        // Try to parse the integer
+        if (sscanf(input, "%d", &value) == 1) {
+            return value;  // Return the valid integer
+        } else {
+            printf("Invalid input. Please enter a valid integer.\n");
+        }
+    }
+}
+
 int main()
 {
 	printf("Client App version: %s\n", CLIENT_VERSION);
@@ -383,6 +415,7 @@ int main()
     serverFD = create_socket();
     if (serverFD < 0){
         printf("Failed creating server FD\n");
+		free(serverData);
         exit(1);
     }
 
@@ -392,6 +425,7 @@ int main()
         printf("Failed creating internal client FD\n");
         if (serverFD)
             close(serverFD);
+		free(serverData);
         exit(1);
     }
 
@@ -402,6 +436,7 @@ int main()
             close(serverFD);
         if (connectedClientFD)
             close(connectedClientFD);
+		free(serverData);
         exit(1);
     }
 
@@ -412,6 +447,7 @@ int main()
             close(serverFD);
         if (connectedClientFD)
             close(connectedClientFD);
+		free(serverData);
         exit(1);
     }
 
@@ -425,10 +461,11 @@ int main()
 		int choice = -1;
 		bzero(choice_buff, MAX);
 
-		/* display menu and get choice */
-		printf("\nWelcome to the Ultimate Chat App.\n");
-		printf("\n1) Chat.\n2) Send File.\n3) Recieve File.\n4) Exit.\n\n Please enter a choice : ");
-		scanf("%d", &choice);
+		showMenu();
+		choice = getIntInput("\nPlease enter a choice. ");
+
+		if (CLIENT_DEBUG_PRINTS)
+			printf("Received %d as input\n", choice);
 
 		snprintf(choice_buff, MAX, "%d", choice);
 		send(internalClientFD, choice_buff, strlen(choice_buff), 0);
@@ -485,6 +522,7 @@ int main()
 		close(serverFD);
     if (internalClientFD)
 		close(internalClientFD);
-
+	if (serverData)
+		free(serverData);
 	return 0;
 }
