@@ -19,14 +19,23 @@ USE:
 
 */
 
-#include "libServer.h"
-#include "libCommon.h"
+#include "../libs/libServer.h"
+#include "../libs/libCommon.h"
+
+SERVER_DATA *gdata = NULL;
 
 /* signal handler to handle abrupt termination of app */
 void signal_handler(int sig){
 	printf("\n Server received signal %d. Shutting down... \n", sig);
-	keep_running = 0;
-	exit(1);
+
+	keep_running = LOOP_STOP;
+
+	if (gdata != NULL){
+		free(gdata);
+		gdata = NULL;
+	}
+
+	exit(EXIT_FAILURE);
 }
 
 /* Func to send file to client */
@@ -34,11 +43,11 @@ int sendFileToClient(int cliFD)
 {
 	int ret = -1;
 	int fileFD = -1;
-    char fileLocation[MAX] = "/home/einfochips/users/trezen/files/server-client-enhanced/ServerFiles/";
-    char fileName[MAX] = "toClient.txt";
-    struct stat st;
+	char fileLocation[MAX] = "/home/einfochips/users/trezen/files/server-client-enhanced/ServerFiles/";
+	char fileName[MAX] = "toClient.txt";
+	struct stat st;
 
-    strcat(fileLocation, fileName);
+	strcat(fileLocation, fileName);
 
 	/* check if file exists */
 	ret = access(fileLocation, F_OK | R_OK);
@@ -97,19 +106,19 @@ int receiveFileFromClient(int connFD)
 {
 	int ret = -1;
 	int fileFD = -1;
-    char fileLocation[MAX] = "/home/einfochips/users/trezen/files/server-client-enhanced/ServerFiles/";
-    char fileName[MAX] = "fromClient.txt";
+	char fileLocation[MAX] = "/home/einfochips/users/trezen/files/server-client-enhanced/ServerFiles/";
+	char fileName[MAX] = "fromClient.txt";
 
-    /* init size to store size of file */
-    int *size = malloc(sizeof(int));
-    bzero(size, sizeof(int));
+	/* init size to store size of file */
+	int *size = malloc(sizeof(int));
+	bzero(size, sizeof(int));
 
-    strcat(fileLocation, fileName);
+	strcat(fileLocation, fileName);
 
-    /* check if file exists at a given location */
-    ret = access(fileLocation, F_OK | R_OK);
+	/* check if file exists at a given location */
+	ret = access(fileLocation, F_OK | R_OK);
 	if (ret >= 0){
-        printf("file already found\n\n");
+		printf("file already found\n\n");
 	}
 
 	/* open and create file if file not available */
@@ -159,125 +168,131 @@ int receiveFileFromClient(int connFD)
 	return 0;
 }
 
-/* Reading thread */
-void *reading(void *server_data)
+void *handleChatThread(void *server_data)
 {
 	int ret = -1;
-    int max_fd = -1;
+	int max_fd = -1;
 	char buff[MAX_CHAT_MSG_LEN] = {0};
-    SERVER_DATA *data = (SERVER_DATA *)server_data;
+	SERVER_DATA *data = (SERVER_DATA *)server_data;
 	int mainClientFD = data->mainClientFD;
+	int secondaryClientFD = data->secondaryClientFD;
 
-    fd_set read_fds;
-    max_fd = mainClientFD > STDIN_FILENO ? mainClientFD : STDIN_FILENO;
+	struct timeval timeout;
+
+	time_t last_heartbeat_sent = time(NULL);
+	time_t last_heartbeat_received = time(NULL);
+
+	fd_set read_fds;
+	max_fd = mainClientFD > STDIN_FILENO ? mainClientFD : STDIN_FILENO;
 
 	/* Infinit Loop */
 	while(keep_running)
 	{
-        FD_ZERO(&read_fds);
-        /*Monitor stdin for user input */
+		FD_ZERO(&read_fds);
+		/*Monitor stdin for user input */
 		FD_SET(STDIN_FILENO, &read_fds);
 		/* Monitor the client FD */
 		FD_SET(mainClientFD, &read_fds);
 
+		/* Set timeout for select */
+		timeout.tv_sec = 10;
+		timeout.tv_usec = 0;
+
 		bzero(buff, MAX_CHAT_MSG_LEN);
 
-        ret = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
-        if (ret < 0) {
-            perror("select");
-            keep_running = 0;
-            break;
-        }
+		ret = select(max_fd + 1, &read_fds, NULL, NULL, &timeout);
+		if (ret < 0) {
+			perror("select");
+			keep_running = LOOP_STOP;
+			break;
+		}
+		else if (ret == 0) {
+			printf("%s: Timeout.\n", __func__);
+			time_t now = time(NULL);
+
+			/* Send heartbeat if interval has elapsed */
+			if (difftime(now, last_heartbeat_sent) >= 15) {
+				if (write(mainClientFD, HEARTBEAT_MSG, 9) < 0) {
+					printf("Failed to send the heartbeat\n");
+					keep_running = LOOP_STOP;
+					break;
+				}
+				if (SERVER_DEBUG_PRINTS)
+					printf("Sending heartbeat...\n");
+				last_heartbeat_sent = now;
+			}
+
+			if (difftime(now, last_heartbeat_received) >= 20) {
+				printf("Hearbeat timeout. Client disconnected !\n");
+				keep_running = LOOP_STOP;
+				break;
+			}
+			continue;
+		}
 
 		/* If data available on client FD */
 		if (FD_ISSET(mainClientFD, &read_fds)) {
 			/* read data into buff */
-			ret = read(((SERVER_DATA *)server_data)->mainClientFD, buff, MAX_CHAT_MSG_LEN);
+			ret = read(mainClientFD, buff, MAX_CHAT_MSG_LEN);
 			if(ret < 0){
 				printf("Error in reading, ERROR:%d.\n", ret);
-				keep_running = 0;
+				keep_running = LOOP_STOP;
 				break;
 			} else if (ret == 0) {
 				printf("Client Disconnected.\n");
-				close(((SERVER_DATA *)server_data)->mainClientFD);
-				keep_running = 0;
+				//close(mainClientFD);
+				keep_running = LOOP_STOP;
 				break;
+				//pthread_exit((void*)-1);
 			}
 
 			/* Remove the new line char from end of msg */
-			if (buff[strlen(buff) - 1] == '\n') {
+			if (strlen(buff) > 0 && (buff[strlen(buff) - 1] == '\n')) {
 				buff[strlen(buff) - 1] = '\0';
 			}
 
 			printMessageInBox(buff);
 
+			/* Update the last received hearbeat */
+			if((strncmp(HEARTBEAT_MSG, buff, 9))){
+				if (SERVER_DEBUG_PRINTS)
+					printf("Received heartbeat...\n");
+				last_heartbeat_received = time(NULL);
+			}
+
 			/* compare and check for "bye" to exit chat */
 			if(!(strncmp(CHAT_TERMINATION_MSG, buff , 3))){
-				keep_running = 0;
+				keep_running = LOOP_STOP;
+				break;
+			}
+		}
+
+		/* Check if stdin has input */
+		if (FD_ISSET(STDIN_FILENO, &read_fds)) {
+			bzero(buff, MAX_CHAT_MSG_LEN);
+
+			/* Read user input */
+			if (fgets(buff, sizeof(buff), stdin) == NULL) {
+				keep_running = LOOP_STOP;
+				break;
+			}
+			printf("\n");
+
+			/* Send the input to the client */
+			ret = write(secondaryClientFD, buff, strlen(buff));
+			if (ret < 0) {
+				keep_running = LOOP_STOP;
+				perror("write");
+				break;
+			}
+
+			/* Check if the user entered "bye" to exit the chat */
+			if (strncmp(CHAT_TERMINATION_MSG, buff, 3) == 0) {
+				keep_running = LOOP_STOP;
 				break;
 			}
 		}
 	}
-	pthread_exit(NULL);
-}
-
-/* writing thread */
-void *writing(void *server_data)
-{
-    int ret = -1;
-    int max_fd = -1;
-    char buff[MAX_CHAT_MSG_LEN] = {0};
-    SERVER_DATA *data = (SERVER_DATA *)server_data;
-    int secondaryClientFD = data->secondaryClientFD;
-
-    fd_set read_fds;
-    max_fd = secondaryClientFD > STDIN_FILENO ? secondaryClientFD : STDIN_FILENO;
-
-    while (keep_running)
-	{
-        FD_ZERO(&read_fds);
-        /*Monitor stdin for user input */
-		FD_SET(STDIN_FILENO, &read_fds);
-		/* Monitor the client FD */
-		FD_SET(secondaryClientFD, &read_fds);
-
-        ret = select(max_fd + 1, &read_fds, NULL, NULL, NULL);
-        if (ret < 0) {
-            perror("select");
-            keep_running = 0;
-            break;
-        }
-
-        /* Check if stdin has input */
-        if (FD_ISSET(STDIN_FILENO, &read_fds)) {
-            bzero(buff, MAX_CHAT_MSG_LEN);
-
-            /* Read user input */
-            if (fgets(buff, sizeof(buff), stdin) == NULL) {
-                keep_running = 0;
-                break;
-            }
-
-            /* Send the input to the client */
-            ret = write(secondaryClientFD, buff, strlen(buff));
-            if (ret < 0) {
-                keep_running = 0;
-                perror("write");
-                break;
-            }
-
-            /* Check if the user entered "bye" to exit the chat */
-            if (strncmp(CHAT_TERMINATION_MSG, buff, 3) == 0) {
-				keep_running = 0;
-				break;
-			}
-		}
-
-		/* Check if the client FD is ready (optional, if you want to read client messages here too) */
-		if (FD_ISSET(secondaryClientFD, &read_fds)) {
-			/* Handle client socket read if necessary */
-		}
-    }
 	pthread_exit(NULL);
 }
 
@@ -343,7 +358,7 @@ int setup_server(int server_fd,
 		printf("Server: accepted the client connection...\n");
 	}
 
-	return 1;
+	return 0;
 }
 
 /* Func to setup the client */
@@ -384,34 +399,30 @@ int setup_client(int client_fd,
 
 /* Multi-threaded chat func */
 int multiThreadedChatFunction(SERVER_DATA *server_data,
-                                pthread_t *readThreadID,
-                                pthread_t *writeThreadID)
+								pthread_t *ThreadID)
 {
-    int ret = -1;
+	int ret = -1;
+	int *retval = NULL;
 
 	printf("\n================= Bidirectional Chat Started ================\n");
 	printf("NOTE: send 'bye' to exit chat app\n\n");
 
-    /* creating threads by default joinable */
-    ret = pthread_create(readThreadID, NULL, reading, (void *)server_data);
-    if(ret != 0)
-    {
-        perror("thread1");
-        return -1;
-    }
-    ret = pthread_create(writeThreadID, NULL, writing, (void *)server_data);
-    if(ret != 0)
-    {
-        perror("thread2");
-        return -1;
-    }
+	ret = pthread_create(ThreadID, NULL, handleChatThread, (void *)server_data);
+	if(ret != 0)
+	{
+		perror("thread1");
+		return -1;
+	}
 
-    /* Joining the threads */
-    pthread_join(*readThreadID, NULL);
-    pthread_join(*writeThreadID, NULL);
+	pthread_join(*ThreadID, (void *)&retval);
+
+	if (retval == (void *)-1){
+		printf("Client disconnection received.\n");
+		return -1;
+	}
 
 	printf("\n================= Bidirectional Chat ended ================\n");
-    return 0;
+	return 0;
 }
 
 int main()
@@ -435,51 +446,53 @@ int main()
 	serverData = (SERVER_DATA *) malloc (sizeof(SERVER_DATA));
 	if (serverData == NULL){
 		printf("Cannot allocate memory for serverData\n");
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
+	gdata = serverData;
+
 	/* Threading implementation */
-	pthread_t readingThread, writingThread;
+	pthread_t Thread;
 
 START:
-	if (connectedClientFD)
+	if (connectedClientFD >= 0)
 		close(connectedClientFD);
-	if (serverFD)
+	if (serverFD >= 0)
 		close(serverFD);
-	if (internalClientFD)
+	if (internalClientFD >= 0)
 		close(internalClientFD);
 
 	/* create server socket */
 	serverFD = create_socket();
 	if (serverFD < 0){
 		printf("Failed creating server FD\n");
-		if (serverData)
+		if (serverData != NULL)
 			free(serverData);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	/* create client socket */
 	internalClientFD = create_socket();
 	if (internalClientFD < 0){
 		printf("Failed creating internal client FD\n");
-		if (serverFD)
+		if (serverFD >= 0)
 			close(serverFD);
-		if (serverData)
+		if (serverData != NULL)
 			free(serverData);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 
 	/* server setup */
 	ret = setup_server(serverFD, &connectedClientFD, &servaddr, &connectedClientAddr, &len);
 	if (ret < 0) {
 		printf("Server: Setup Failed!\n");
-		if (serverFD)
+		if (serverFD >= 0)
 			close(serverFD);
-		if (internalClientFD)
+		if (internalClientFD >= 0)
 			close(internalClientFD);
-		if (serverData)
+		if (serverData != NULL)
 			free(serverData);
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	printf("Server: Setup Complete!\n");
 
@@ -487,16 +500,16 @@ START:
 	ret = setup_client(internalClientFD, &internalClientAddr);
 	if (ret < 0) {
 	printf("Client: Setup Failed!\n");
-		if (connectedClientFD)
+		if (connectedClientFD >= 0)
 			close(connectedClientFD);
-		if (serverFD)
+		if (serverFD >= 0)
 			close(serverFD);
-		if (internalClientFD)
+		if (internalClientFD >= 0)
 			close(internalClientFD);
-		if (serverData)
+		if (serverData != NULL)
 			free(serverData);
 
-		exit(1);
+		exit(EXIT_FAILURE);
 	}
 	printf("Client: Setup Complete!\n");
 
@@ -515,7 +528,8 @@ START:
 		if (bytes_received < 0){
 			printf("Failed to reveive bytes from client\n");
 			goto START;
-		} else if (bytes_received == 0){
+		}
+		else if (bytes_received == 0){
 			/* If client disconnected, close FDs and start server again */
 			printf("Client Disconnected\n");
 			goto START;
@@ -527,11 +541,11 @@ START:
 		switch(atoi(choice_buff))
 		{
 			case CHAT:
+
 				/* Re-initialize the threads flag to run the chat app again */
-				keep_running = 1;
+				keep_running = LOOP_START;
 				ret = multiThreadedChatFunction(serverData,
-						&readingThread,
-						&writingThread);
+												&Thread);
 				if (ret < 0) {
 					printf("Chat functionality exited with code %d\n", ret);
 					running = 0;
@@ -541,11 +555,11 @@ START:
 				break;
 
 			case SEND_FILE:
-                printf("\n\n======== Sending file to Server: ========\n\n");
 
-                ret = sendFileToClient(internalClientFD);
-                if (ret < 0) {
-                    printf("Chat functionality exited with code %d\n", ret);
+				printf("\n\n======== Sending file to Server: ========\n\n");
+				ret = sendFileToClient(internalClientFD);
+				if (ret < 0) {
+					printf("Chat functionality exited with code %d\n", ret);
 					running = 0;
 					break;
 				}
@@ -553,16 +567,16 @@ START:
 				break;
 
 			case RECIEVE_FILE:
-                printf("\n\n======== Recieving file from server: ========\n\n");
 
-                ret = receiveFileFromClient(connectedClientFD);
-                if (ret < 0) {
-                    printf("Chat functionality exited with code %d\n", ret);
+				printf("\n\n======== Recieving file from server: ========\n\n");
+				ret = receiveFileFromClient(connectedClientFD);
+				if (ret < 0) {
+					printf("Chat functionality exited with code %d\n", ret);
 					running = 0;
 					break;
 				}
 				/* break out of switch */
-                break;
+				break;
 
 			case EXIT:
 				printf("\nServer: Client Exited.\n\n");
@@ -575,13 +589,13 @@ START:
 	}
 	while(running);
 
-	if (connectedClientFD)
+	if (connectedClientFD >= 0)
 		close(connectedClientFD);
-	if (serverFD)
+	if (serverFD >= 0)
 		close(serverFD);
-	if (internalClientFD)
+	if (internalClientFD >= 0)
 		close(internalClientFD);
-	if (serverData)
+	if (serverData != NULL)
 		free(serverData);
 
 	return 0;

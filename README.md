@@ -4,10 +4,19 @@ An enhanced version of socket programming server client model example.
 Author: Trezen Parmar
 E-MAIL: trezen7984891023@gmail.com
 
+DIR STRUCTURE:
+
+1. sourceFiles/ - Contains the source files server.c client.c and common.c
+2. libs/		- Contains the library files libServer.c libClient.c and libCommon.c
+3. ServerFiles/ - Contains files as a database for server app, all files on server will be here and files to send will be here too.
+4. ClientFiles/ - Contains files as a database for client app, all files on client side will be here and files to send will be here too.
+5. Makefile		- Contains instructions to compile the source, DO NOT EDIT.
+
 DESCRIPTION:
 
-This app is a server-client app which uses sockets mainly for communication.
-This is a bidirectional app in which both participants can send and receive
+This app is a server-client chat app which uses sockets for transfer
+of data between two processes.
+This is a bidirectional chat app in which both participants can send and receive
 messages simultaneously. It also has a menu based approach to select the
 appropriate options.
 

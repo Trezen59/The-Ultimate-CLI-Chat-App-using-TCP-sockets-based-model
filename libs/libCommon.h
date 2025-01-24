@@ -17,19 +17,15 @@
 #include <fcntl.h>
 #include <signal.h>
 
-#define MAX 100
-#define PORT1 8080
-#define PORT2 8081
-#define MAX_CHAT_MSG_LEN 1000
+#define MAX						100
+#define PORT1					8080
+#define PORT2					8081
+#define MAX_CHAT_MSG_LEN		1000
 
-#define CHAT_TERMINATION_MSG "bye"
+#define HEARTBEAT_MSG			"HEARTBEAT"
+#define CHAT_TERMINATION_MSG	"bye"
 
-typedef struct{
-    int mainServerFD;
-    int mainClientFD;
-    int secondaryClientFD;
-}SERVER_DATA;
-
+/* func declarations */
 int create_socket();
 void showMenu();
 void printMessageInBox(const char *);
