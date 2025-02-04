@@ -24,6 +24,8 @@ USE:
 
 SERVER_DATA *gdata = NULL;
 
+const char *SERVER_FILES_DIR = "/home/einfochips/users/trezen/files/server-client-enhanced/ServerFiles";
+
 /* signal handler to handle abrupt termination of app */
 void signal_handler(int sig){
 	printf("\n Server received signal %d. Shutting down... \n", sig);
@@ -36,6 +38,49 @@ void signal_handler(int sig){
 	}
 
 	exit(EXIT_FAILURE);
+}
+
+int sendFileInfo(int cliFD)
+{
+	DIR *dir;
+	struct dirent *entry;
+	int ret = -1;
+	int len = 0;
+	int i = 0;
+	char fileNames[MAX] = {0};
+
+	/* Get the server folder location from which file info
+	   will be extracted */
+
+	/* Open the directory */
+	if ((dir = opendir(SERVER_FILES_DIR)) == NULL) {
+		perror("Failed to open server files directory");
+		return EXIT_FAILURE;
+	}
+
+	printf("Sending files info to client\n");
+
+	/* Read each entry in the directory */
+	while ((entry = readdir(dir)) != NULL) {
+		/* select all regular files */
+		if (entry->d_type == DT_REG) {
+			len += snprintf(fileNames + len, MAX - len, "%d. %s\n", ++i, entry->d_name);
+		}
+	}
+
+	/* send file names in a single buffer */
+	ret = send(cliFD, fileNames, len, 0);
+	if (ret < 0) {
+		printf("Failed to send file names to client.\n");
+		closedir(dir);
+		return EXIT_FAILURE;
+	}
+
+	printf("Sending files info to client: success\n");
+
+	/* Close the directory */
+	closedir(dir);
+	return 0;
 }
 
 /* Func to send file to client */
@@ -551,6 +596,19 @@ START:
 					running = 0;
 					break;
 				}
+				/* break out of switch */
+				break;
+
+			case SHOW_FILES_INFO:
+
+				printf("\n\n======== Sending file info to Client ========\n\n");
+				ret = sendFileInfo(internalClientFD);
+				if (ret < 0) {
+					printf("Failed to send file info to client.\n");
+					running = 0;
+					break;
+				}
+				printf("\n\n======== Sending file info to Client: Done ========\n\n");
 				/* break out of switch */
 				break;
 

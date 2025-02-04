@@ -16,6 +16,8 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 #define MAX						100
 #define PORT1					8080

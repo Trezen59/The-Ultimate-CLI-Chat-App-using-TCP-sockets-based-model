@@ -38,6 +38,22 @@ void signal_handler(int sig){
 	exit(EXIT_FAILURE);
 }
 
+int showFileInfo(int cliFD)
+{
+	int ret = -1;
+	char fileNames[MAX] = {0};
+
+	ret = recv(cliFD, fileNames, MAX, 0);
+	if (ret < 0){
+		printf("Failed receiving file names from server.\n");
+		return EXIT_FAILURE;
+	}
+
+	printf("Files on server location:\n%s\n", fileNames);
+
+	return 0;
+}
+
 /* Func to send file to server */
 int sendFileToServer(int cliFD)
 {
@@ -533,6 +549,17 @@ int main()
 						&Thread);
 				if (ret < 0) {
 					printf("Chat functionality exited with code %d\n", ret);
+					running = 0;
+					break;
+				}
+				break;
+
+			case SHOW_FILES_INFO:
+
+				printf("\nShowing all files information located on server.\n");
+				ret = showFileInfo(connectedClientFD);
+				if (ret < 0) {
+					printf("Failed showing file info.\n");
 					running = 0;
 					break;
 				}

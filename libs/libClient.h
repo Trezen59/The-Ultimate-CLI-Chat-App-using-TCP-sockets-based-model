@@ -7,7 +7,7 @@
 /* Client app version */
 #define MAJOR_VERSION "1"
 #define MINOR_VERSION "0"
-#define PATCH_VERSION "7"
+#define PATCH_VERSION "8"
 #define CLIENT_VERSION MAJOR_VERSION"."MINOR_VERSION"."PATCH_VERSION
 
 /* Client app debug */
@@ -32,6 +32,7 @@ typedef struct{
 /* For switch case in menu */
 enum MENU {
 	CHAT = 1,
+	SHOW_FILES_INFO,
 	SEND_FILE,
 	RECIEVE_FILE,
 	EXIT

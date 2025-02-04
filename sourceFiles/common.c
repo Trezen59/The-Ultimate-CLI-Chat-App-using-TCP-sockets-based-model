@@ -21,9 +21,10 @@ void showMenu()
 	/* display menu and get choice */
 	printf("\nWelcome to the Ultimate Chat App.\n");
 	printf("\n1) Chat.");
-	printf("\n2) Send File.");
-	printf("\n3) Recieve File.");
-	printf("\n4) Exit.\n");
+	printf("\n2) Get files info from server.");
+	printf("\n3) Send File.");
+	printf("\n4) Recieve File.");
+	printf("\n5) Exit.\n");
 }
 
 /* Func to print received msg in a box */
